@@ -1,6 +1,6 @@
 {
   "name": "deepseek-code",
-  "version": "0.1.0",
+  "version": "1.0.4",
   "description": "🇰🇷 한국어 특화 AI 코딩 에이전트 - DeepSeek V3 기반으로 자연어 코딩 작업 수행. Claude Code처럼 파일 탐색, 코드 분석, 자동 수정 지원. Korean-optimized AI coding assistant.",
   "bin": {
     "deepseek-code": "./dist/cli.mjs",
