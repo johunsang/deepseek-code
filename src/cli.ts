@@ -63,21 +63,55 @@ ${c.dim}API 키는 https://platform.deepseek.com 에서 발급받을 수 있습�
   return true;
 }
 
-async function checkVersion(): Promise<void> {
+import { execSync } from 'child_process';
+
+async function getLatestVersion(): Promise<string | null> {
   try {
     const res = await fetch('https://registry.npmjs.org/deepseek-code/latest', {
       signal: AbortSignal.timeout(3000),
     });
     if (res.ok) {
       const data = await res.json();
-      const latestVersion = data.version;
-      if (latestVersion && latestVersion !== VERSION) {
-        console.log(`${c.yellow}⚡ 새 버전 ${latestVersion} 사용 가능 (현재: ${VERSION})${c.reset}`);
-        console.log(`${c.dim}   npm update -g deepseek-code${c.reset}\n`);
-      }
+      return data.version || null;
     }
+  } catch {}
+  return null;
+}
+
+async function checkVersion(): Promise<void> {
+  const latestVersion = await getLatestVersion();
+  if (latestVersion && latestVersion !== VERSION) {
+    console.log(`${c.yellow}⚡ 새 버전 ${latestVersion} 사용 가능 (현재: ${VERSION})${c.reset}`);
+    console.log(`${c.dim}   dsc --update 로 업데이트${c.reset}\n`);
+  }
+}
+
+async function autoUpdate(): Promise<void> {
+  console.log(`${c.cyan}🔄 업데이트 확인 중...${c.reset}`);
+
+  const latestVersion = await getLatestVersion();
+
+  if (!latestVersion) {
+    console.log(`${c.red}✕${c.reset} 버전 확인 실패`);
+    return;
+  }
+
+  if (latestVersion === VERSION) {
+    console.log(`${c.green}✓${c.reset} 이미 최신 버전입니다 (v${VERSION})`);
+    return;
+  }
+
+  console.log(`${c.yellow}⚡${c.reset} 새 버전 발견: ${VERSION} → ${latestVersion}`);
+  console.log(`${c.cyan}📦 업데이트 설치 중...${c.reset}\n`);
+
+  try {
+    // npm 또는 pnpm으로 글로벌 업데이트
+    execSync('npm install -g deepseek-code@latest', { stdio: 'inherit' });
+    console.log(`\n${c.green}✓${c.reset} 업데이트 완료! v${latestVersion}`);
+    console.log(`${c.dim}  dsc 를 다시 실행하세요${c.reset}`);
   } catch {
-    // 버전 체크 실패해도 무시
+    console.log(`\n${c.red}✕${c.reset} 업데이트 실패`);
+    console.log(`${c.dim}  수동 설치: npm install -g deepseek-code@latest${c.reset}`);
   }
 }
 
@@ -839,6 +873,7 @@ ${c.bold}사용법:${c.reset}
 
 ${c.bold}옵션:${c.reset}
   --key <API_KEY>     API 키 저장 (한번만 설정하면 됨)
+  -u, --update        최신 버전으로 자동 업데이트
   -i, --interactive   인터랙티브 모드 - 여러 작업을 비동기로 실행
   -m, --model <id>    사용할 모델 선택 (기본: deepseek-v3.2)
   --pipe              파이프라인 모드 - 분석/구현/검토 3단계 순차 실행
@@ -896,6 +931,12 @@ async function main() {
   // 버전만 표시
   if (args.includes('-v') || args.includes('--version')) {
     console.log(`딥시크 코드 v${VERSION}`);
+    return;
+  }
+
+  // 자동 업데이트
+  if (args.includes('--update') || args.includes('-u')) {
+    await autoUpdate();
     return;
   }
 
