@@ -15,6 +15,80 @@ config(); // .env 파일 로드
 import { CodingAgent, runCodingTask, type TokenUsage } from './agent/coding';
 import { AVAILABLE_MODELS, type ModelInfo, getApiKey } from './models';
 import type { TaskLog } from './types';
+import { createRequire } from 'module';
+
+// 버전 정보
+const require = createRequire(import.meta.url);
+const pkg = require('../package.json');
+const VERSION = pkg.version;
+
+// 색상 (맨 위에 정의)
+const c = {
+  reset: '\x1b[0m',
+  bold: '\x1b[1m',
+  dim: '\x1b[2m',
+  green: '\x1b[32m',
+  yellow: '\x1b[33m',
+  blue: '\x1b[34m',
+  red: '\x1b[31m',
+  cyan: '\x1b[36m',
+  magenta: '\x1b[35m',
+  gray: '\x1b[90m',
+};
+
+// ============================================================
+// 시작 시 검사
+// ============================================================
+
+async function checkApiKey(): Promise<boolean> {
+  const apiKey = getApiKey();
+  if (!apiKey) {
+    console.log(`
+${c.red}╔═══════════════════════════════════════════════════════════╗
+║  DEEPSEEK_API_KEY가 설정되지 않았습니다                   ║
+╚═══════════════════════════════════════════════════════════╝${c.reset}
+
+${c.bold}설정 방법:${c.reset}
+
+1. 환경변수로 설정:
+   ${c.cyan}export DEEPSEEK_API_KEY="your-api-key"${c.reset}
+
+2. .env 파일에 추가:
+   ${c.cyan}DEEPSEEK_API_KEY=your-api-key${c.reset}
+
+${c.dim}API 키는 https://platform.deepseek.com 에서 발급받을 수 있습니다.${c.reset}
+`);
+    return false;
+  }
+  return true;
+}
+
+async function checkVersion(): Promise<void> {
+  try {
+    const res = await fetch('https://registry.npmjs.org/deepseek-code/latest', {
+      signal: AbortSignal.timeout(3000),
+    });
+    if (res.ok) {
+      const data = await res.json();
+      const latestVersion = data.version;
+      if (latestVersion && latestVersion !== VERSION) {
+        console.log(`${c.yellow}⚡ 새 버전 ${latestVersion} 사용 가능 (현재: ${VERSION})${c.reset}`);
+        console.log(`${c.dim}   npm update -g deepseek-code${c.reset}\n`);
+      }
+    }
+  } catch {
+    // 버전 체크 실패해도 무시
+  }
+}
+
+function printBanner(): void {
+  console.log(`
+${c.cyan}╔═══════════════════════════════════════════════════════════╗
+║  ${c.bold}딥시크 코드 (DeepSeek Code)${c.reset}${c.cyan} v${VERSION}                      ║
+║  🇰🇷 한국어 특화 AI 코딩 에이전트                          ║
+╚═══════════════════════════════════════════════════════════╝${c.reset}
+`);
+}
 
 // 비용 계산 (DeepSeek V3 기준: $0.27/M input, $1.10/M output)
 function calculateCost(usage: TokenUsage): number {
@@ -28,23 +102,6 @@ function formatTokens(n: number): string {
   if (n >= 1_000) return (n / 1_000).toFixed(1) + 'K';
   return n.toString();
 }
-
-// ============================================================
-// 색상
-// ============================================================
-
-const c = {
-  reset: '\x1b[0m',
-  bold: '\x1b[1m',
-  dim: '\x1b[2m',
-  green: '\x1b[32m',
-  yellow: '\x1b[33m',
-  blue: '\x1b[34m',
-  red: '\x1b[31m',
-  cyan: '\x1b[36m',
-  magenta: '\x1b[35m',
-  gray: '\x1b[90m',
-};
 
 // ============================================================
 // 진행 상태 표시
@@ -688,14 +745,33 @@ ${c.bold}특징:${c.reset}
 async function main() {
   const args = process.argv.slice(2);
 
+  // 도움말은 바로 표시
   if (args.length === 0 || args.includes('-h') || args.includes('--help')) {
     printHelp();
     return;
   }
 
+  // 모델 목록은 바로 표시
   if (args.includes('-l') || args.includes('--list') || args.includes('--list-models')) {
     listModels();
     return;
+  }
+
+  // 버전만 표시
+  if (args.includes('-v') || args.includes('--version')) {
+    console.log(`딥시크 코드 v${VERSION}`);
+    return;
+  }
+
+  // 배너 출력
+  printBanner();
+
+  // 버전 체크 (비동기, 백그라운드)
+  checkVersion();
+
+  // API 키 검사
+  if (!await checkApiKey()) {
+    process.exit(1);
   }
 
   // 프롬프트 추출
