@@ -9,10 +9,10 @@
 export * from './types';
 
 // LLM
-export { LLM, getDefaultLLM, createLLM, switchModel, getAvailableModels, getCurrentModel } from './llm';
+export { LLM, getDefaultLLM, createLLM } from './llm';
 
-// 모델 정보
-export { AVAILABLE_MODELS, type ModelInfo } from './models';
+// 모델 (DeepSeek V3.2 고정)
+export { DEEPSEEK_MODEL, AVAILABLE_MODELS, getCurrentModel, getDefaultModel, getApiKey, saveApiKey, deleteApiKey, type ModelInfo } from './models';
 
 // 도구
 export {
@@ -55,35 +55,6 @@ export {
   type CodingAgentConfig,
   type TokenUsage,
 } from './agent';
-
-// 모델 관리 (DeepSeek 전용)
-export {
-  getReasoningModel,
-  getCoderModel,
-  getDefaultModel,
-  getModelById,
-  createSession,
-  getSession,
-  closeSession,
-  listSessions,
-  clearAllSessions,
-  createSessionPool,
-  closeSessionPool,
-  type ModelSession,
-  type ParallelTask,
-  type ParallelResult,
-} from './models';
-
-// 예제 모듈
-export { getHelloWorld, printHelloWorld } from './hello-world';
-
-// 수학 함수
-export {
-  fibonacci,
-  fibonacciRecursive,
-  fibonacciIterative,
-  fibonacciMemoized,
-} from './fibonacci';
 
 // ============================================================
 // 편의 함수

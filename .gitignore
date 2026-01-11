@@ -4,8 +4,3 @@ dist/
 .env.local
 *.log
 .DS_Store
-__pycache__/
-*.py
-hello-world.js
-src/fibonacci.ts
-src/hello-world.ts
