@@ -13,7 +13,7 @@ import { config } from 'dotenv';
 config(); // .env 파일 로드
 
 import { CodingAgent, runCodingTask, type TokenUsage } from './agent/coding';
-import { AVAILABLE_MODELS, type ModelInfo, getApiKey } from './models';
+import { AVAILABLE_MODELS, type ModelInfo, getApiKey, saveApiKey } from './models';
 import type { TaskLog } from './types';
 import { createRequire } from 'module';
 
@@ -50,11 +50,11 @@ ${c.red}╔═══════════════════════
 
 ${c.bold}설정 방법:${c.reset}
 
-1. 환경변수로 설정:
-   ${c.cyan}export DEEPSEEK_API_KEY="your-api-key"${c.reset}
+1. CLI에서 설정 (권장):
+   ${c.cyan}dsc --key YOUR_API_KEY${c.reset}
 
-2. .env 파일에 추가:
-   ${c.cyan}DEEPSEEK_API_KEY=your-api-key${c.reset}
+2. 환경변수로 설정:
+   ${c.cyan}export DEEPSEEK_API_KEY="your-api-key"${c.reset}
 
 ${c.dim}API 키는 https://platform.deepseek.com 에서 발급받을 수 있습니다.${c.reset}
 `);
@@ -838,6 +838,7 @@ ${c.bold}사용법:${c.reset}
   dsc "<작업1>" "<작업2>"         여러 작업 동시 병렬 실행
 
 ${c.bold}옵션:${c.reset}
+  --key <API_KEY>     API 키 저장 (한번만 설정하면 됨)
   -i, --interactive   인터랙티브 모드 - 여러 작업을 비동기로 실행
   -m, --model <id>    사용할 모델 선택 (기본: deepseek-v3.2)
   --pipe              파이프라인 모드 - 분석/구현/검토 3단계 순차 실행
@@ -895,6 +896,19 @@ async function main() {
   // 버전만 표시
   if (args.includes('-v') || args.includes('--version')) {
     console.log(`딥시크 코드 v${VERSION}`);
+    return;
+  }
+
+  // API 키 설정
+  const keyIndex = args.indexOf('--key');
+  if (keyIndex !== -1 && args[keyIndex + 1]) {
+    const apiKey = args[keyIndex + 1];
+    if (saveApiKey(apiKey)) {
+      console.log(`${c.green}✓${c.reset} API 키가 저장되었습니다.`);
+      console.log(`${c.dim}  위치: ~/.deepseek-code/config${c.reset}`);
+    } else {
+      console.log(`${c.red}✕${c.reset} API 키 저장 실패`);
+    }
     return;
   }
 
