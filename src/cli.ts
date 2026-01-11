@@ -697,10 +697,10 @@ ${c.bold}${c.cyan}딥시크 코드 (DeepSeek Code)${c.reset} - 한국어 특화 
   Claude Code처럼 파일 탐색, 코드 분석, 자동 수정을 지원합니다.
 
 ${c.bold}사용법:${c.reset}
-  dsc "<작업>"                    자연어로 코딩 작업 요청
+  dsc                             ${c.cyan}인터랙티브 모드${c.reset} (기본)
+  dsc "<작업>"                    단일 작업 실행
   dsc "<작업>" --pipe             파이프라인 모드 (분석→구현→검토)
   dsc "<작업1>" "<작업2>"         여러 작업 동시 병렬 실행
-  dsc -i                          ${c.cyan}인터랙티브 모드${c.reset} (대화형)
 
 ${c.bold}옵션:${c.reset}
   -i, --interactive   인터랙티브 모드 - 여러 작업을 비동기로 실행
@@ -745,8 +745,8 @@ ${c.bold}특징:${c.reset}
 async function main() {
   const args = process.argv.slice(2);
 
-  // 도움말은 바로 표시
-  if (args.length === 0 || args.includes('-h') || args.includes('--help')) {
+  // 도움말
+  if (args.includes('-h') || args.includes('--help')) {
     printHelp();
     return;
   }
@@ -797,17 +797,10 @@ async function main() {
     }
   }
 
-  // 인터랙티브 모드
-  if (interactive) {
+  // 인터랙티브 모드 (기본값: 프롬프트 없으면 자동 시작)
+  if (interactive || prompts.length === 0) {
     await runInteractiveMode(modelId);
     return;
-  }
-
-  if (prompts.length === 0) {
-    console.log(`${c.red}✕${c.reset} 프롬프트를 입력하세요`);
-    console.log(`  ${c.dim}dsc "원하는 작업을 설명하세요"${c.reset}`);
-    console.log(`  ${c.dim}dsc -i  (인터랙티브 모드)${c.reset}`);
-    process.exit(1);
   }
 
   if (multi || prompts.length > 1) {
