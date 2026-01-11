@@ -8,6 +8,36 @@ import { BaseTool } from './base';
 import { type ToolResult, type ToolParameters } from '../types';
 
 // ============================================================
+// 공용 백업 함수 (마지막 백업만 유지)
+// ============================================================
+
+async function createBackup(filePath: string): Promise<string | null> {
+  try {
+    const stat = await fs.stat(filePath);
+    if (stat.isDirectory()) {
+      return null;
+    }
+
+    const dir = path.dirname(filePath);
+    const fileName = path.basename(filePath);
+    const backupDir = path.join(dir, '.backup');
+
+    await fs.mkdir(backupDir, { recursive: true });
+
+    // 백업 파일명: 원본명.bak (마지막 백업만 유지)
+    const backupPath = path.join(backupDir, `${fileName}.bak`);
+
+    // 파일 복사
+    const content = await fs.readFile(filePath);
+    await fs.writeFile(backupPath, content);
+
+    return backupPath;
+  } catch {
+    return null;
+  }
+}
+
+// ============================================================
 // 파일 읽기 도구
 // ============================================================
 
@@ -99,12 +129,12 @@ export class WriteFileTool extends BaseTool {
 }
 
 // ============================================================
-// 파일 편집 도구 (str_replace 방식)
+// 파일 편집 도구 (str_replace 방식, 자동 백업)
 // ============================================================
 
 export class EditFileTool extends BaseTool {
   name = 'edit_file';
-  description = '파일의 특정 부분을 찾아서 교체합니다. 정확한 문자열 매칭을 사용합니다.';
+  description = '파일의 특정 부분을 찾아서 교체합니다. 수정 전 자동으로 백업을 생성합니다.';
   parameters: ToolParameters = {
     type: 'object',
     properties: {
@@ -145,6 +175,9 @@ export class EditFileTool extends BaseTool {
           `${matches}개의 일치 항목이 있습니다. 더 구체적인 문자열을 지정하세요.`
         );
       }
+
+      // 수정 전 백업 생성
+      await createBackup(filePath);
 
       const newContent = content.replace(oldString, newString);
       await fs.writeFile(filePath, newContent, 'utf-8');
@@ -274,37 +307,6 @@ export class DeleteFileTool extends BaseTool {
     required: ['path'],
   };
 
-  private async createBackup(filePath: string): Promise<string | null> {
-    try {
-      const stat = await fs.stat(filePath);
-      if (stat.isDirectory()) {
-        return null; // 디렉토리는 백업하지 않음
-      }
-
-      // 백업 디렉토리 생성 (.backup/YYYY-MM-DD/)
-      const now = new Date();
-      const dateStr = now.toISOString().split('T')[0];
-      const timeStr = now.toTimeString().split(' ')[0].replace(/:/g, '-');
-
-      const dir = path.dirname(filePath);
-      const fileName = path.basename(filePath);
-      const backupDir = path.join(dir, '.backup', dateStr);
-
-      await fs.mkdir(backupDir, { recursive: true });
-
-      // 백업 파일명: 원본명.HH-MM-SS.bak
-      const backupPath = path.join(backupDir, `${fileName}.${timeStr}.bak`);
-
-      // 파일 복사
-      const content = await fs.readFile(filePath);
-      await fs.writeFile(backupPath, content);
-
-      return backupPath;
-    } catch {
-      return null;
-    }
-  }
-
   async execute(args: Record<string, unknown>): Promise<ToolResult> {
     const targetPath = args.path as string;
 
@@ -316,12 +318,8 @@ export class DeleteFileTool extends BaseTool {
         return this.successResponse(`디렉토리가 삭제되었습니다: ${targetPath}`);
       } else {
         // 파일 삭제 전 백업 생성
-        const backupPath = await this.createBackup(targetPath);
+        await createBackup(targetPath);
         await fs.unlink(targetPath);
-
-        if (backupPath) {
-          return this.successResponse(`삭제되었습니다: ${targetPath}\n백업 위치: ${backupPath}`);
-        }
         return this.successResponse(`삭제되었습니다: ${targetPath}`);
       }
     } catch (error) {
