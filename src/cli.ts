@@ -457,6 +457,8 @@ interface QueuedTask {
   status: 'pending' | 'running' | 'completed' | 'failed';
   startTime?: number;
   endTime?: number;
+  tokens?: number;
+  cwd: string;
   worker?: Worker;
 }
 
@@ -472,6 +474,58 @@ function addToHistory(dir: string) {
   dirHistory.unshift(dir);
   // 최대 개수 유지
   if (dirHistory.length > MAX_HISTORY) dirHistory.pop();
+}
+
+// ============================================================
+// 작업 히스토리 자동 기록 (.dsc-history/YYYY-MM-DD.md)
+// ============================================================
+
+import * as fs from 'fs';
+import * as os from 'os';
+
+const HISTORY_DIR = path.join(os.homedir(), '.dsc-history');
+
+function logTaskHistory(task: {
+  prompt: string;
+  status: string;
+  startTime: number;
+  endTime: number;
+  tokens?: number;
+  cwd: string;
+}) {
+  try {
+    // 히스토리 디렉토리 생성
+    if (!fs.existsSync(HISTORY_DIR)) {
+      fs.mkdirSync(HISTORY_DIR, { recursive: true });
+    }
+
+    // 오늘 날짜 파일
+    const now = new Date();
+    const dateStr = now.toISOString().split('T')[0];
+    const timeStr = now.toTimeString().split(' ')[0];
+    const historyFile = path.join(HISTORY_DIR, `${dateStr}.md`);
+
+    // 파일이 없으면 헤더 추가
+    const isNewFile = !fs.existsSync(historyFile);
+
+    const elapsed = ((task.endTime - task.startTime) / 1000).toFixed(1);
+    const status = task.status === 'completed' ? '✓' : '✕';
+    const tokens = task.tokens ? ` | ${formatTokens(task.tokens)} 토큰` : '';
+
+    let content = '';
+    if (isNewFile) {
+      content += `# 작업 히스토리 - ${dateStr}\n\n`;
+    }
+
+    content += `## ${timeStr} ${status}\n`;
+    content += `- **작업**: ${task.prompt}\n`;
+    content += `- **경로**: ${task.cwd}\n`;
+    content += `- **소요**: ${elapsed}초${tokens}\n\n`;
+
+    fs.appendFileSync(historyFile, content, 'utf-8');
+  } catch {
+    // 히스토리 기록 실패해도 무시
+  }
 }
 
 function runInteractiveMode(modelId: string) {
@@ -517,9 +571,20 @@ function runInteractiveMode(modelId: string) {
       task.worker.on('message', (msg: any) => {
         task.endTime = Date.now();
         task.status = msg.success ? 'completed' : 'failed';
+        task.tokens = msg.usage?.totalTokens || 0;
         const sec = ((task.endTime - task.startTime!) / 1000).toFixed(1);
         if (msg.usage) totalTokens += msg.usage.totalTokens || 0;
-        console.log(`${msg.success ? c.green + '✓' : c.red + '✕'}${c.reset} [${task.id}] ${sec}s ${formatTokens(msg.usage?.totalTokens || 0)}`);
+        console.log(`${msg.success ? c.green + '✓' : c.red + '✕'}${c.reset} [${task.id}] ${sec}s ${formatTokens(task.tokens)}`);
+
+        // 히스토리 기록
+        logTaskHistory({
+          prompt: task.prompt,
+          status: task.status,
+          startTime: task.startTime!,
+          endTime: task.endTime,
+          tokens: task.tokens,
+          cwd: task.cwd,
+        });
       });
 
       task.worker.on('error', (err) => {
@@ -623,7 +688,7 @@ function runInteractiveMode(modelId: string) {
     }
 
     // 새 작업
-    const task: QueuedTask = { id: ++taskId, prompt: input, status: 'running', startTime: Date.now() };
+    const task: QueuedTask = { id: ++taskId, prompt: input, status: 'running', startTime: Date.now(), cwd: process.cwd() };
     tasks.push(task);
     console.log(`${c.blue}▶${c.reset} [${task.id}] ${input.slice(0, 40)}`);
     startTask(task);
