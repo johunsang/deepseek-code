@@ -257,12 +257,12 @@ export class CreateDirectoryTool extends BaseTool {
 }
 
 // ============================================================
-// 파일 삭제 도구
+// 파일 삭제 도구 (자동 백업 포함)
 // ============================================================
 
 export class DeleteFileTool extends BaseTool {
   name = 'delete_file';
-  description = '파일 또는 빈 디렉토리를 삭제합니다.';
+  description = '파일 또는 빈 디렉토리를 삭제합니다. 삭제 전 자동으로 백업을 생성합니다.';
   parameters: ToolParameters = {
     type: 'object',
     properties: {
@@ -274,17 +274,56 @@ export class DeleteFileTool extends BaseTool {
     required: ['path'],
   };
 
+  private async createBackup(filePath: string): Promise<string | null> {
+    try {
+      const stat = await fs.stat(filePath);
+      if (stat.isDirectory()) {
+        return null; // 디렉토리는 백업하지 않음
+      }
+
+      // 백업 디렉토리 생성 (.backup/YYYY-MM-DD/)
+      const now = new Date();
+      const dateStr = now.toISOString().split('T')[0];
+      const timeStr = now.toTimeString().split(' ')[0].replace(/:/g, '-');
+
+      const dir = path.dirname(filePath);
+      const fileName = path.basename(filePath);
+      const backupDir = path.join(dir, '.backup', dateStr);
+
+      await fs.mkdir(backupDir, { recursive: true });
+
+      // 백업 파일명: 원본명.HH-MM-SS.bak
+      const backupPath = path.join(backupDir, `${fileName}.${timeStr}.bak`);
+
+      // 파일 복사
+      const content = await fs.readFile(filePath);
+      await fs.writeFile(backupPath, content);
+
+      return backupPath;
+    } catch {
+      return null;
+    }
+  }
+
   async execute(args: Record<string, unknown>): Promise<ToolResult> {
     const targetPath = args.path as string;
 
     try {
       const stat = await fs.stat(targetPath);
+
       if (stat.isDirectory()) {
         await fs.rmdir(targetPath);
+        return this.successResponse(`디렉토리가 삭제되었습니다: ${targetPath}`);
       } else {
+        // 파일 삭제 전 백업 생성
+        const backupPath = await this.createBackup(targetPath);
         await fs.unlink(targetPath);
+
+        if (backupPath) {
+          return this.successResponse(`삭제되었습니다: ${targetPath}\n백업 위치: ${backupPath}`);
+        }
+        return this.successResponse(`삭제되었습니다: ${targetPath}`);
       }
-      return this.successResponse(`삭제되었습니다: ${targetPath}`);
     } catch (error) {
       if ((error as NodeJS.ErrnoException).code === 'ENOENT') {
         return this.failResponse(`파일/디렉토리를 찾을 수 없습니다: ${targetPath}`);
