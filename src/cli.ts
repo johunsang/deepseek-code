@@ -460,6 +460,20 @@ interface QueuedTask {
   worker?: Worker;
 }
 
+// 디렉토리 히스토리 (최대 20개)
+const dirHistory: string[] = [];
+const MAX_HISTORY = 20;
+
+function addToHistory(dir: string) {
+  // 중복 제거
+  const idx = dirHistory.indexOf(dir);
+  if (idx !== -1) dirHistory.splice(idx, 1);
+  // 맨 앞에 추가
+  dirHistory.unshift(dir);
+  // 최대 개수 유지
+  if (dirHistory.length > MAX_HISTORY) dirHistory.pop();
+}
+
 function runInteractiveMode(modelId: string) {
   const apiKey = getApiKey();
   if (!apiKey) {
@@ -467,8 +481,12 @@ function runInteractiveMode(modelId: string) {
     process.exit(1);
   }
 
+  // 현재 디렉토리를 히스토리에 추가
+  addToHistory(process.cwd());
+
   console.log(`\n${c.cyan}═══ 인터랙티브 모드 ═══${c.reset}`);
-  console.log(`${c.dim}작업 입력 후 Enter | s=상태 q=종료${c.reset}`);
+  console.log(`${c.dim}작업 입력 | s=상태 /hd=디렉토리 /cd=이동 q=종료${c.reset}`);
+  console.log(`${c.dim}현재: ${process.cwd()}${c.reset}`);
 
   const tasks: QueuedTask[] = [];
   let taskId = 0;
@@ -548,6 +566,58 @@ function runInteractiveMode(modelId: string) {
         const icon = t.status === 'running' ? '◐' : t.status === 'completed' ? '●' : '✕';
         console.log(`  ${icon} [${t.id}] ${t.prompt.slice(0, 35)}`);
       });
+      prompt();
+      return;
+    }
+
+    // /hd - 디렉토리 히스토리 표시
+    if (cmd === '/hd' || cmd === 'hd') {
+      console.log(`\n${c.cyan}📁 디렉토리 히스토리${c.reset}`);
+      if (dirHistory.length === 0) {
+        console.log(`${c.dim}  (없음)${c.reset}`);
+      } else {
+        dirHistory.forEach((dir, i) => {
+          const current = dir === process.cwd() ? ` ${c.green}← 현재${c.reset}` : '';
+          console.log(`  ${c.yellow}${i}${c.reset}) ${dir}${current}`);
+        });
+        console.log(`${c.dim}  /cd <번호> 또는 /cd <경로> 로 이동${c.reset}`);
+      }
+      prompt();
+      return;
+    }
+
+    // /cd - 디렉토리 이동
+    if (input.startsWith('/cd ') || input.startsWith('cd ')) {
+      const arg = input.replace(/^\/?cd\s+/, '').trim();
+      let targetDir = arg;
+
+      // 숫자면 히스토리에서 선택
+      if (/^\d+$/.test(arg)) {
+        const idx = parseInt(arg);
+        if (idx >= 0 && idx < dirHistory.length) {
+          targetDir = dirHistory[idx];
+        } else {
+          console.log(`${c.red}✕${c.reset} 잘못된 번호: ${arg}`);
+          prompt();
+          return;
+        }
+      }
+
+      // 디렉토리 이동
+      try {
+        process.chdir(targetDir);
+        addToHistory(process.cwd());
+        console.log(`${c.green}✓${c.reset} ${process.cwd()}`);
+      } catch {
+        console.log(`${c.red}✕${c.reset} 이동 실패: ${targetDir}`);
+      }
+      prompt();
+      return;
+    }
+
+    // /pwd - 현재 디렉토리
+    if (cmd === '/pwd' || cmd === 'pwd') {
+      console.log(`${c.cyan}📍${c.reset} ${process.cwd()}`);
       prompt();
       return;
     }
